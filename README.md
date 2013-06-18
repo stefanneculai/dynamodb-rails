@@ -1,6 +1,6 @@
 # Dynamo
 
-TODO: Write a gem description
+<b>WORK IN PROGRESS. INSPIRED BY Dynamoid.</b>
 
 ## Installation
 

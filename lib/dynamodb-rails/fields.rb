@@ -11,8 +11,8 @@ module Dynamo #:nodoc:
       class_attribute :attributes
 
       self.attributes = {}
-      field :created_at
-      field :updated_at
+      field :created_at, :D
+      field :updated_at, :D
     end
     
     module ClassMethods
@@ -24,9 +24,9 @@ module Dynamo #:nodoc:
       # @param [Hash] options any additional options for the field
       #
       # @since 0.2.0
-      def field(name, type = nil)
+      def field(name, type = 'S', options={})
         named = name.to_s
-        self.attributes[name] = type.nil? ? {} : {:type => type}
+        self.attributes[name] = options.merge({:type => type})
 
         define_method(named) { read_attribute(named) }
         define_method("#{named}?") { !read_attribute(named).nil? }
@@ -90,14 +90,14 @@ module Dynamo #:nodoc:
     #
     # @since 0.2.0
     def set_created_at
-      self.created_at = DateTime.now.to_f
+      self.created_at = DateTime.now
     end
 
     # Automatically called during the save callback to set the updated_at time.
     #
     # @since 0.2.0    
     def set_updated_at
-      self.updated_at = DateTime.now.to_f
+      self.updated_at = DateTime.now
     end
     
   end

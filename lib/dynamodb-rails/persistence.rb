@@ -55,63 +55,12 @@ module Dynamo
         incoming = (incoming || {}).symbolize_keys
         Hash.new.tap do |hash|
           self.attributes.each do |attribute, options|
-            hash[attribute] = undump_field(incoming[attribute], options)
+            hash[attribute] = Dynamo::Helpers.undump_field(incoming[attribute], options)
           end
           incoming.each {|attribute, value| hash[attribute] = value unless hash.has_key? attribute }
         end
       end
 
-      # Undump a value for a given type. Given a string, it'll determine (based on the type provided) whether to turn it into a
-      # string, integer, float, set, array, datetime, or serialized return value.
-      #
-      # @since 0.2.0
-      def undump_field(value, options)
-        if value.nil? && (default_value = options[:default])
-          value = default_value.respond_to?(:call) ? default_value.call : default_value
-        else
-          return if value.nil? || (value.respond_to?(:empty?) && value.empty?)
-        end
-
-        if options[:type]
-          case options[:type]
-            when :string
-              value.to_s
-            when :integer
-              value.to_i
-            when :float
-              value.to_f
-            when :set, :array
-              if value.is_a?(Set) || value.is_a?(Array)
-                value
-              else
-                Set[value]
-              end
-            when :datetime
-              if value.is_a?(Date) || value.is_a?(DateTime) || value.is_a?(Time)
-                value
-              else
-                Time.at(value).to_datetime
-              end
-            when :serialized
-              if value.is_a?(String)
-                options[:serializer] ? options[:serializer].load(value) : YAML.load(value)
-              else
-                value
-              end
-            when :boolean
-              # persisted as 't', but because undump is called during initialize it can come in as true
-              if value == 't' || value == true
-                true
-              elsif value == 'f' || value == false
-                false
-              else
-                raise ArgumentError, "Boolean column neither true nor false"
-              end
-            else
-              raise ArgumentError, "Unknown type #{options[:type]}"
-          end
-        end
-      end
     end
 
     # Set updated_at and any passed in field to current DateTime. Useful for things like last_login_at, etc.
@@ -155,24 +104,11 @@ module Dynamo
     #
     def update!(conditions = {}, &block)
       run_callbacks(:update) do
-        if self.changed_attributes.has_key?(self.hash_key.to_s)
-          conditions[self.hash_key] = {:value => self.changed_attributes[self.hash_key.to_s]}
-        else
-          conditions[self.range_key] = {:value => self.hash_key_value}
+        new_attrs = Dynamo::Client.update_item(options, self.dump, conditions.merge(key_conditions)) do |t|
+          yield t
         end
 
-        if self.range_key
-          if self.changed_attributes.has_key?(self.range_key.to_s)
-            conditions[self.range_key] = {:value => self.changed_attributes[self.range_key.to_s]}
-          else
-            conditions[self.range_key] = {:value => self.range_key_value}
-          end
-        end
-
-        Dynamo::Client.update_item(options, self.dump, conditions) # do |t|
-        #  yield t
-        #end
-        #load(new_attrs)
+        load(new_attrs)
       end
     end
 
@@ -188,7 +124,7 @@ module Dynamo
     # @since 0.2.0
     def destroy
       run_callbacks(:destroy) do
-    #    self.delete
+        self.delete
       end
       self
     end
@@ -197,55 +133,45 @@ module Dynamo
     #
     # @since 0.2.0
     def delete
-      # options = range_key ? {:range_key => dump_field(self.read_attribute(range_key), self.class.attributes[range_key])} : {}
-      # Dynamo::Adapter.delete(self.class.table_name, self.hash_key, options)
-    end
-
-    # Determine how to dump this field. Given a value, it'll determine how to turn it into a value that can be
-    # persisted into the datastore.
-    #
-    # @since 0.2.0
-    def dump_field(value, options)
-      return if value.nil? || (value.respond_to?(:empty?) && value.empty?)
-
-      if options[:type]
-        case options[:type]
-          when :string
-            value.to_s
-          when :integer
-            value.to_i
-          when :float
-            value.to_f
-          when :set, :array
-            if value.is_a?(Set) || value.is_a?(Array)
-              value
-            else
-              Set[value]
-            end
-          when :datetime
-            value.to_time.to_f
-          when :serialized
-            options[:serializer] ? options[:serializer].dump(value) : value.to_yaml
-          when :boolean
-            value.to_s[0]
-          else
-            value
-        end
-      else
-        value
-      end
+      Dynamo::Client.delete_item(self.class.table_name, self.key_conditions)
+      self
     end
 
     def dump
       Hash.new.tap do |hash|
         self.class.attributes.each do |attribute, options|
           if new_record?
-            hash[attribute] = dump_field(self.read_attribute(attribute), options)
+            hash[attribute] = Dynamo::Helpers.dump_field(self.read_attribute(attribute), options)
           else
-            hash[attribute] = dump_field(self.read_attribute(attribute), options) if self.changed_attributes.has_key?(attribute.to_sym)
+            hash[attribute] = Dynamo::Helpers.dump_field(self.read_attribute(attribute), options) if self.changed_attributes.has_key?(attribute.to_sym)
           end
         end
       end
+    end
+
+    # Key conditions
+    def key_conditions
+      conditions = {}
+
+      if self.changed_attributes.has_key?(self.hash_key)
+        key = Dynamo::Helpers.dump_field(self.changed_attributes(self.hash_key), self.class.attributes[self.hash_key])
+        conditions[self.hash_key] = {:value => key}
+      else
+        key = Dynamo::Helpers.dump_field(self.hash_key_value, self.class.attributes[self.hash_key])
+        conditions[self.hash_key] = {:value => key}
+      end
+
+      if self.range_key
+        if self.changed_attributes.has_key?(self.range_key)
+          key = Dynamo::Helpers.dump_field(self.changed_attributes(self.range_key), self.class.attributes[self.range_key])
+          conditions[self.range_key] = {:value => key}
+        else
+          key = Dynamo::Helpers.dump_field(self.range_key_value, self.class.attributes[self.range_key])
+          conditions[self.range_key] = {:value => key}
+        end
+      end
+
+      conditions
     end
 
     private
@@ -266,21 +192,7 @@ module Dynamo
         if(new_record?)
           response = Dynamo::Client.put_item(options, self.dump, conditions)
         else
-          if self.changed_attributes.has_key?(self.hash_key)
-            conditions[self.hash_key] = {:value => self.changed_attributes[self.hash_key]}
-          else
-            conditions[self.hash_key] = {:value => self.hash_key_value}
-          end
-
-          if self.range_key
-            if self.changed_attributes.has_key?(self.range_key)
-              conditions[self.range_key] = {:value => self.changed_attributes[self.range_key]}
-            else
-              conditions[self.range_key] = {:value => self.range_key_value}
-            end
-          end
-
-          response = Dynamo::Client.update_item(options, self.dump, conditions)
+          response = Dynamo::Client.update_item(options, self.dump, conditions.merge(self.key_conditions))
         end
 
         @new_record = false

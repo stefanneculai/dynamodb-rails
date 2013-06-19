@@ -75,8 +75,8 @@ module Dynamo #:nodoc:
       end
 
       # secondary_index :atrribute, :type,
-      def index(field, type, projection=:ALL, non_key=[])
-        self.options[:indexes].push({:field => field, :type=> type, :projection => projection, :non_key => non_key})
+      def index(name, type, projection=:ALL, non_key=[])
+        self.options[:indexes].push({:field => name, :type=> type, :projection => projection, :non_key => non_key})
       end
 
       # Initialize a new object and immediately save it to the database.
@@ -120,11 +120,10 @@ module Dynamo #:nodoc:
       #
       # @since 0.2.0
       def exists?(id_or_conditions = {})
-        return true
-        #case id_or_conditions
-        #  when Hash then ! where(id_or_conditions).all.empty?
-        #  else !! find(id_or_conditions)
-        #end
+        case id_or_conditions
+          when Hash then ! where(id_or_conditions).all.empty?
+          else !! find(id_or_conditions)
+        end
       end
     end
 

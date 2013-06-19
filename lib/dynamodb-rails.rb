@@ -9,6 +9,7 @@ require "active_support/time_with_zone"
 require "active_model"
 require 'pp'
 
+require 'dynamodb-rails/helpers'
 require 'dynamodb-rails/errors'
 require 'dynamodb-rails/fields'
 require 'dynamodb-rails/persistence'

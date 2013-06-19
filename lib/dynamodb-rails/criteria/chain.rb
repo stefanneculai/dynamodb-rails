@@ -28,8 +28,6 @@ module Dynamo #:nodoc:
       #
       # @example A more complicated criteria
       #   where(:name => 'Josh', 'created_at.gt' => DateTime.now - 1.day)
-      #
-      # @since 0.2.0
       def where(args)
         args.each {|k, v| query[k.to_sym] = v}
         self
@@ -49,7 +47,6 @@ module Dynamo #:nodoc:
       end
       
       # Destroys all the records matching the criteria.
-      #
       def destroy_all
         ids = []
         
@@ -60,14 +57,35 @@ module Dynamo #:nodoc:
           #  ranges << hash[source.range_key.to_sym]
           #end
           
-          Dynamo::Client.delete(source.table_name, ids,{:range_key => ranges})
+          source.destroy(source.table_name, ids,{:range_key => ranges})
         else
           Dynamo::Client.scan(source.table_name, query, scan_opts).collect do |hash| 
             ids << hash[source.hash_key.to_sym]
           end
           
-          Dynamo::Client.delete(source.table_name, ids)
+          source.destroy(source.table_name, ids)
         end   
+      end
+
+      # Destroys all the records matching the criteria.
+      def delete_all
+        ids = []
+
+        if range?
+          ranges = []
+          # Dynamo::Client.query(source.table_name, range_query).collect do |hash|
+          #  ids << hash[source.hash_key.to_sym]
+          #  ranges << hash[source.range_key.to_sym]
+          #end
+
+          source.destroy(source.table_name, ids,{:range_key => ranges})
+        else
+          Dynamo::Client.scan(source.table_name, query, scan_opts).collect do |hash|
+            ids << hash[source.hash_key.to_sym]
+          end
+
+          source.destroy(source.table_name, ids)
+        end
       end
 
       # Returns the first record matching the criteria.
@@ -117,10 +135,6 @@ module Dynamo #:nodoc:
       private
 
       # The actual records referenced by the association.
-      #
-      # @return [Enumerator] an iterator of the found records.
-      #
-      # @since 0.2.0
       def records
         results = if range?
           records_with_range
@@ -130,6 +144,7 @@ module Dynamo #:nodoc:
         @batch_size ? results : Array(results)
       end
 
+      # Get records from a range request.
       def records_with_range
         Enumerator.new do |yielder|
           Dynamo::Client.query(source.table_name, query, query_opts).each do |hash|
@@ -139,10 +154,6 @@ module Dynamo #:nodoc:
       end
 
       # If the query does not match an index, we'll manually scan the associated table to find results.
-      #
-      # @return [Enumerator] an iterator of the found records.
-      #
-      # @since 0.2.0
       def records_without_index
         if Dynamo::Config.warn_on_scan
           Dynamo.logger.warn 'Queries without an index are forced to use scan and are generally much slower than indexed queries!'
@@ -160,6 +171,7 @@ module Dynamo #:nodoc:
         end
       end
 
+      # Get the query keys. Sometimes it may be created_at.gt.
       def query_keys
         query.keys.collect{|k| k.to_s.split('.').first}
       end
@@ -172,8 +184,8 @@ module Dynamo #:nodoc:
         # Query has hash_key or index_key
         query_index = nil
         source.options[:indexes].each do |index|
-          if query_keys.include?(index[:field].to_s)
-            query_index = index[:field]
+          if query_keys.include?(index[:name].to_s)
+            query_index = index[:name]
             @secondary_index = "#{source.table_name}_#{query_index.to_s}_index"
           end
         end
@@ -189,6 +201,7 @@ module Dynamo #:nodoc:
         only_hash || only_hash_range || only_hash_index
       end
 
+      # Options for query.
       def query_opts
         opts = {}
         opts[:index_name] = @secondary_index if @secondary_index
@@ -198,7 +211,8 @@ module Dynamo #:nodoc:
         opts[:select] = @select if @select
         opts
       end
-      
+
+      # Options for scan.
       def scan_opts
         opts = {}
         opts[:limit] = @limit if @limit

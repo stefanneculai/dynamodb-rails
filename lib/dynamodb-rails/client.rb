@@ -27,6 +27,7 @@ module Dynamo
       end
     end
 
+    # Find out the type of the field.
     def type_indicator(value)
       case
         when value.kind_of?(AWS::DynamoDB::Binary) then "B"
@@ -51,6 +52,7 @@ module Dynamo
       end
     end
 
+    # Convert value from response to the right type.
     def value_from_response(hash, options = {})
       (type, value) = hash.to_a.first
       type = type.to_s.upcase
@@ -71,6 +73,7 @@ module Dynamo
       end
     end
 
+    # Get comparison type.
     def field_comparison(key)
       options = ['EQ', 'NE', 'LE', 'LT', 'GE', 'GT', 'NOT_NULL', 'NULL', 'CONTAINS', 'NOT_CONTAINS', 'BEGINS_WITH', 'IN', 'BETWEEN']
       c_key = key.to_s.upcase.split('.').last
@@ -79,6 +82,7 @@ module Dynamo
       'EQ'
     end
 
+    # Get field that is compared.
     def field_from_comparison(key)
       options = ['EQ', 'NE', 'LE', 'LT', 'GE', 'GT', 'NOT_NULL', 'NULL', 'CONTAINS', 'NOT_CONTAINS', 'BEGINS_WITH', 'IN', 'BETWEEN']
       c_key = key.to_s.upcase.split('.').last
@@ -87,32 +91,35 @@ module Dynamo
       key
     end
 
+    # Create table.
     def create_table(opts)
       r = {}
+
+      # Table name.
+      r[:table_name] = opts[:table_name].to_s
+
+      # Attribute definitions.
       attribute_definitions = []
-      opts[:keys].each do |key, value|
+      opts[:keys].merge(opts[:indexes]).each do |key, value|
         attribute_definitions.push({:attribute_name => value[:name].to_s, :attribute_type=> value[:type].to_s.upcase})
-      end
-      opts[:indexes].each do |index|
-        attribute_definitions.push({:attribute_name => index[:field].to_s, :attribute_type=> index[:type].to_s.upcase})
       end
       r[:attribute_definitions] = attribute_definitions
 
-      r[:table_name] = opts[:table_name].to_s
-
+      # Keys.
       key_schema = []
       opts[:keys].each do |key, value|
         key_schema.push({:attribute_name => value[:name].to_s, :key_type=> key.to_s.upcase})
       end
       r[:key_schema] = key_schema
 
+      # Local secondary indexes
       local_secondary_indexes = []
       opts[:indexes].each do |index|
         secondary_index = {}
-        secondary_index[:index_name] = "#{opts[:table_name].to_s}_#{index[:field].to_s}_index"
+        secondary_index[:index_name] = "#{opts[:table_name].to_s}_#{index[:name].to_s}_index"
         secondary_index[:key_schema] = []
         secondary_index[:key_schema].push({:attribute_name => opts[:keys][:hash][:name].to_s, :key_type => "HASH"})
-        secondary_index[:key_schema].push({:attribute_name => index[:field].to_s, :key_type => "RANGE"})
+        secondary_index[:key_schema].push({:attribute_name => index[:name].to_s, :key_type => "RANGE"})
         secondary_index[:projection] = {}
         secondary_index[:projection][:projection_type] = index[:projection].to_s.upcase
         index[:projection][:non_key_attributes] = index[:non_key].map{|v| v.to_s} if index[:projection].to_s.upcase == 'INCLUDE'
@@ -121,15 +128,19 @@ module Dynamo
       end
       r[:local_secondary_indexes] = local_secondary_indexes unless local_secondary_indexes.empty?
 
+      # Provisioned throughput
       r[:provisioned_throughput] = opts[:throughput]
 
+      # Do request
       @@client.create_table(r)
     end
 
+    # Describe table.
     def describe_table (table_name)
       @@client.describe_table({:table_name => table_name.to_s})
     end
 
+    # List tables.
     def list_tables(exclusive_start_table_name = nil, limit = nil)
       r = {}
       r[:exclusive_start_table_name] = exclusive_start_table_name unless exclusive_start_table_name.nil?
@@ -138,15 +149,20 @@ module Dynamo
       @@client.list_tables(r)
     end
 
+    # Put new item.
     def put_item(opts, obj, conditions)
       r = {}
+
+      # Table name.
       r[:table_name] = opts[:table_name].to_s
 
+      # Item attributes.
       r[:item] = {}
       obj.each do |key, value|
         r[:item][key.to_s] = {type_indicator(value) => "#{value}"} unless value.nil?
       end
 
+      # Set expectations.
       r[:expected] = {}
       conditions.each do |field, cond|
         r[:expected][field.to_s] = {}
@@ -154,25 +170,35 @@ module Dynamo
         r[:expected][field.to_s][:value] = {type_indicator(cond[:value]) => "#{cond[:value]}"} unless cond[:value].nil?
       end
 
+      # Save item.
       @@client.put_item(r)
     end
 
+    # Update item.
     def update_item(opts, obj, conditions)
+
+      puts conditions
+
       r = {}
+
+      # Table name.
       r[:table_name] = opts[:table_name].to_s
 
+      # Keys.
       r[:key] = {}
       opts[:keys].each do |key, value|
         r[:key][value[:name].to_s] = {type_indicator(conditions[value[:name]][:value]) => "#{conditions[value[:name]][:value].to_s}"}
       end
 
+      # Set attributes.
       r[:attribute_updates] = {}
       obj.each do |key, value|
         r[:attribute_updates][key.to_s] = {}
         r[:attribute_updates][key.to_s][:value] = {type_indicator(value) => "#{value}"} unless value.nil?
-        r[:attribute_updates][key.to_s][:action] = value.nil? ? 'DELETE' : 'PUT'
+        r[:attribute_updates][key.to_s][:action] = value.nil? ? 'DELETE' : 'PUT' # Nil values are deleted
       end
 
+      # Set expectations.
       r[:expected] = {}
       conditions.each do |field, cond|
         r[:expected][field.to_s] = {}
@@ -180,36 +206,64 @@ module Dynamo
         r[:expected][field.to_s][:value] = {type_indicator(cond[:value]) => "#{cond[:value]}"} unless cond[:value].nil?
       end
 
-      PP.pp(r)
-
+      # Return new values
       r[:return_values] = 'ALL_NEW'
 
-      @@client.update_item(r)
+      # Do request.
+      response = @@client.update_item(r)
+
+      return [] if response[:attributes].nil?
+      response[:attributes].inject({}){|e,(k, v)| e[k.to_sym] = value_from_response(v); e}
     end
 
+    def delete_item(table_name, key)
+      r = {}
+
+      # Table name.
+      r[:table_name] = table_name.to_s
+
+      # Set keys
+      r[:key] = {}
+      key.each do |k, v|
+        r[:key][k.to_s] = {type_indicator(v[:value]) => "#{v[:value]}"}
+      end
+
+      @@client.delete_item(r)
+    end
+
+    # Get item.
     def get_item(table_name, key, options)
       r = {}
+
+      # Table name.
       r[:table_name] = table_name.to_s
+
+      # Consistent read TODO add to all requests.
       r[:consistent_read] = true if options[:consistent_read] == true
 
+      # Set keys
       r[:key] = {}
       key.each do |k, v|
         r[:key][k.to_s] = {type_indicator(v) => "#{v}"}
       end
 
+      # Get item.
       response = @@client.get_item(r)
 
       return false if response[:item].nil?
-
       response[:item].inject({}){|e,(k, v)| e[k.to_sym] = value_from_response(v); e}
     end
 
+    # Batch get item.
     def batch_get_item(table_name, keys, options)
       r = {}
+
+      # Requested items.
       r[:request_items] = {}
       r[:request_items][table_name.to_s] = {}
       r[:request_items][table_name.to_s][:consistent_read] = true if options[:consistent_read] == true
 
+      # Set keys for each table.
       r[:request_items][table_name.to_s][:keys] = [] unless keys.empty?
       keys.each do |key|
         l_key = {}
@@ -224,12 +278,13 @@ module Dynamo
       response = @@client.batch_get_item(r)
 
       return false if response[:responses][table_name.to_s].empty?
-
       response[:responses][table_name.to_s].map{|item| item.inject({}){|e,(k, v)| e[k.to_sym] = value_from_response(v); e}}
     end
 
+    # Scan table for certain conditions.
     def scan(table_name, query, opts, total = 0)
 
+      # Limit is fake. No request to be done.
       if !opts[:limit].nil? && opts[:limit].to_i <= 0
         return []
       end
@@ -239,9 +294,11 @@ module Dynamo
       return [] if count == 0 && !count.nil?
 
       r = {}
+
+      # Table name.
       r[:table_name] = table_name.to_s
 
-      # Ask for as many items as we care about.
+      # Ask for as many items as we care about. TODO reconsider
       # r[:limit] = opts[:limit] - total if opts[:limit]
 
       # Set exclusive start key if there is one.

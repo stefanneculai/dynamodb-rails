@@ -24,9 +24,9 @@ module Dynamo #:nodoc:
       # @param [Hash] options any additional options for the field
       #
       # @since 0.2.0
-      def field(name, options = {})
+      def field(name, type = nil)
         named = name.to_s
-        self.attributes[name] = options
+        self.attributes[name] = type.nil? ? {} : {:type => type}
 
         define_method(named) { read_attribute(named) }
         define_method("#{named}?") { !read_attribute(named).nil? }

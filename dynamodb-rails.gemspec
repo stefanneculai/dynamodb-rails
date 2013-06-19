@@ -1,15 +1,15 @@
 # coding: utf-8
 lib = File.expand_path('../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'dynamo/version'
+require 'dynamodb-rails/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "awesome-dynamodb"
+  spec.name          = "dynamodb-rails"
   spec.version       = Dynamo::VERSION
   spec.authors       = ["Stefan"]
   spec.email         = ["stefan.neculai@gmail.com"]
-  spec.description   = %q{TODO: Write a gem description}
-  spec.summary       = %q{TODO: Write a gem summary}
+  spec.description   = %q{Rails ORM for Amazon Dynamodb}
+  spec.summary       = %q{Rails ORM for Amazon Dynamodb}
   spec.homepage      = ""
   spec.license       = "MIT"
 
@@ -32,4 +32,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency(%q<redcarpet>, ["= 1.17.2"])
   spec.add_dependency(%q<github-markup>, [">= 0"])
   spec.add_dependency(%q<pry>, [">= 0"])
+  spec.add_dependency(%q<orm_adapter>, [">= 0"])
 end

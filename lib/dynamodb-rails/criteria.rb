@@ -1,5 +1,5 @@
 # encoding: utf-8
-require 'dynamo/criteria/chain'
+require 'dynamodb-rails/criteria/chain'
 
 module Dynamo
 

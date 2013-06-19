@@ -1,3 +1,5 @@
+require 'orm_adapter'
+
 # encoding: utf-8
 module Dynamo #:nodoc:
 
@@ -24,6 +26,8 @@ module Dynamo #:nodoc:
     end
 
     module ClassMethods
+      include OrmAdapter::ToAdapter
+
       # Set up table options, including naming it whatever you want, setting the id key, and manually overriding read and
       # write capacity.
       #
@@ -144,7 +148,7 @@ module Dynamo #:nodoc:
     end
 
     def load(attrs)
-      attrs.each {|key, value| send "#{key}=", value }
+      self.class.undump(attrs).each {|key, value| send "#{key}=", value }
     end
 
     # An object is equal to another object if their ids are equal.
@@ -155,7 +159,7 @@ module Dynamo #:nodoc:
         super
       else
         return false if other.nil?
-        other.is_a?(Dynamo::Model) && self.hash_key == other.hash_key && self.range_value == other.range_value
+        other.is_a?(Dynamo::Model) && self.hash_key == other.hash_key && self.range_key == other.range_key
       end
     end
 
@@ -198,5 +202,64 @@ module Dynamo #:nodoc:
     def range_key_value
       @attributes[self.class.range_key]
     end
+
+    class OrmAdapter < ::OrmAdapter::Base
+      # get a list of column names for a given class
+      def column_names
+        klass.attributes.keys
+      end
+
+      # @see OrmAdapter::Base#get!
+      def get!(id)
+        klass.find_by_id(wrap_key(id)) || raise(Dynamo::Model::ModelNotFound)
+      end
+
+      # @see OrmAdapter::Base#get
+      def get(id)
+        klass.where(klass.hash_key => wrap_key(id)).first
+      end
+
+      # @see OrmAdapter::Base#find_first
+      def find_first(options = {})
+        conditions, order = extract_conditions!(options)
+#        klass.limit(1).where(conditions_to_fields(conditions)).order_by(order).first
+        klass.where(conditions_to_fields(conditions)).limit(1).first
+      end
+
+      # @see OrmAdapter::Base#find_all
+      def find_all(options = {})
+        conditions, order, limit, offset = extract_conditions!(options)
+#        klass.where(conditions_to_fields(conditions)).order_by(order).limit(limit).offset(offset)
+        klass.where(conditions_to_fields(conditions)).limit(limit)
+      end
+
+      # @see OrmAdapter::Base#create!
+      def create!(attributes = {})
+        klass.create!(attributes)
+      end
+
+      # @see OrmAdapter::Base#destroy
+      def destroy(object)
+        object.destroy if valid_object?(object)
+      end
+
+      protected
+
+      def conditions_to_fields(conditions)
+        conditions.inject({}) do |fields, (key, value)|
+          if value.is_a?(Dynamo::Model) && assoc_key = association_key(key)
+            fields.merge(assoc_key => Set[value.id])
+          else
+            fields.merge(key => value)
+          end
+        end
+      end
+
+      def association_key(key)
+        k = "#{key}_ids"
+        column_names.find{|c| c == k || c == k.to_sym}
+      end
+    end
+
   end
 end

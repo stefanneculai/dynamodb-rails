@@ -7,6 +7,9 @@ module Dynamo
     # Generic error class.
     class Error < StandardError; end
 
+    # Model not found error.
+    class ModelNotFound < StandardError; end
+
     # InvalidField is raised when an attribute is specified for an index, but the attribute does not exist.
     class InvalidField < Error; end
 

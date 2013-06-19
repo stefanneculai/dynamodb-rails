@@ -31,6 +31,32 @@ module Dynamo
         end
       end
 
+      def get_key(id)
+        key = {}
+
+        # HASH KEY
+        if id.respond_to?(:to_str)
+          unless self.range_key.nil?
+            raise 'Key is expected to be [HASH, RANGE].'
+          end
+          key = {self.hash_key => id}
+
+          # RANGE KEY
+        elsif id.respond_to?(:each)
+          if self.range_key.nil?
+            raise 'Key is expected to be [HASH].'
+          end
+
+          if id.length != 2
+            raise 'Key is expected to be [HASH,RANGE].'
+          end
+          key[self.hash_key] = id.first
+          key[self.range_key] = id.last
+        end
+
+        return key
+      end
+
       # Return objects found by the given array of ids, either hash keys, or hash/range key combinations using BatchGet.
       # Returns empty array if no results found.
       #
@@ -44,9 +70,17 @@ module Dynamo
       #   find all the tweets using hash key and range key with consistent read
       #   Tweet.find_all([['1', 'red'], ['1', 'green']], :consistent_read => true)
       def find_all(ids, options = {})
-        items = Dynamo::Client.batch_get_item(self.table_name, ids, options)
-        #puts items
-        items ? items[self.table_name].map{|i| from_database(i)} : []
+
+        keys = []
+
+        ids.each do |id|
+          keys.push(get_key(id))
+        end
+
+        return [] if keys.empty?
+
+        items = Dynamo::Client.batch_get_item(self.table_name, keys, options)
+        items ? items.map{|i| from_database(i)} : []
       end
 
       # Find one object directly by id.
@@ -57,18 +91,8 @@ module Dynamo
       #
       # @since 0.2.0
       def find_by_id(id, options={})
-        key = {}
 
-        # HASH KEY
-        if id.respond_to?(:to_str)
-          key = {self.hash_key => id}
-
-        # RANGE KEY
-        elsif id.respond_to?(:each)
-          key = id
-        end
-
-        item = Dynamo::Client.get_item(self.table_name, key, options)
+        item = Dynamo::Client.get_item(self.table_name, get_key(id), options)
         if item
           from_database(item)
         else

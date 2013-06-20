@@ -12,13 +12,13 @@ module Dynamo #:nodoc:
     included do
       class_attribute :options, :read_only_attributes
       self.options = {}
-      self.options[:table_name] = self.name.split('::').last.downcase.pluralize
+      self.options[:table_name] = "#{Dynamo::Config.namespace}_#{self.name.split('::').last.downcase.pluralize}"
       self.options[:throughput] = {
         :read_capacity_units => Dynamo::Config.read_capacity,
         :write_capacity_units => Dynamo::Config.write_capacity
       }
       self.options[:indexes] = []
-      self.options[:keys] = {:hash => {:name => :id, :type => :S}}
+      self.options[:keys] = {:hash => {:name => :id}}
 
       self.read_only_attributes = []
 
@@ -36,19 +36,29 @@ module Dynamo #:nodoc:
       #
       # @since 0.4.0
       def table(name)
-        self.options[:table_name] = name
+        self.options[:table_name] = "#{Dynamo::Config.namespace}_#{name}"
       end
 
-      def key(key_type,name, type)
-        self.options[:keys][key_type] = {:name => name, :type => type}
+      # Set key
+      def hash_key(*args)
+        if args.size == 0
+          self.options[:keys][:hash][:name] unless self.options[:keys][:hash].nil?
+        elsif args.size == 2 || args.size == 1
+          self.options[:keys][:hash] = {:name => args[0], :type => (args.size == 1 ? :S : args[1])}
+        else
+          raise 'Wrong number of arguments'
+        end
       end
 
-      def hash_key
-        self.options[:keys][:hash][:name] unless self.options[:keys][:hash].nil?
-      end
-
-      def range_key
-        self.options[:keys][:range][:name] unless self.options[:keys][:range].nil?
+      # Set key
+      def range_key(*args)
+        if args.size == 0
+          self.options[:keys][:range][:name] unless self.options[:keys][:range].nil?
+        elsif args.size == 2 || args.size == 1
+          self.options[:keys][:range] = {:name => args[0], :type => (args.size == 1 ? :S : args[1])}
+        else
+          raise 'Wrong number of arguments'
+        end
       end
 
       def attr_readonly(*read_only_attributes)
@@ -75,8 +85,9 @@ module Dynamo #:nodoc:
       end
 
       # secondary_index :atrribute, :type,
-      def index(name, type, projection=:ALL, non_key=[])
-        self.options[:indexes].push({:field => name, :type=> type, :projection => projection, :non_key => non_key})
+      def index(name, projection=:ALL, non_key=[])
+        raise "No such field #{name}" unless @attributes.has_key?(name)
+        self.options[:indexes].push({:field => name, :projection => projection, :non_key => non_key})
       end
 
       # Initialize a new object and immediately save it to the database.
@@ -136,8 +147,12 @@ module Dynamo #:nodoc:
     # @since 0.2.0
     def initialize(attrs = {})
       run_callbacks :initialize do
-        #self.class.send(:field, self.class.hash_key) unless self.respond_to?(self.class.hash_key)
-        #self.class.send(:field, self.class.range_key) unless self.respond_to?(self.class.range_key)
+        # Set keys as fields.
+        self.class.send(:field, self.options[:keys][:hash][:name]) if self.options[:keys].has_key?(:hash)
+        self.class.send(:field, self.options[:keys][:range][:name]) if self.options[:keys].has_key?(:range)
+
+        # Set keys type
+        self.options[:keys].inject({}){|h, (k, v)| h[k] = Dynamo::Helpers.field_to_key(v); h}
 
         @new_record = true
         @attributes ||= {}

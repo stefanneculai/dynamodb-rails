@@ -100,8 +100,11 @@ module Dynamo
 
       # Attribute definitions.
       attribute_definitions = []
-      opts[:keys].merge(opts[:indexes]).each do |key, value|
+      opts[:keys].each do |key, value|
         attribute_definitions.push({:attribute_name => value[:name].to_s, :attribute_type=> value[:type].to_s.upcase})
+      end
+      opts[:indexes].each do |index|
+        attribute_definitions.push({:attribute_name => index[:name].to_s, :attribute_type=> index[:type].to_s.upcase})
       end
       r[:attribute_definitions] = attribute_definitions
 

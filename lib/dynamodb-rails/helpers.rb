@@ -50,5 +50,12 @@ module Dynamo
       end
     end
 
+    def field_to_key(hash)
+      hash[:type] = :N if hash[:type].to_s.upcase == "D"
+
+      raise "Wrong key type #{hash[:type]}" unless ["N", "S", "B"].include?(hash[:type].to_s.upcase)
+
+      hash
+    end
   end
 end

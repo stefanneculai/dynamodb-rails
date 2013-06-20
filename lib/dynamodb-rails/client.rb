@@ -227,8 +227,8 @@ module Dynamo
 
       # Set keys
       r[:key] = {}
-      key.each do |k, v|
-        r[:key][k.to_s] = {type_indicator(v) => "#{v}"}
+      key.each do |k, e|
+        r[:key][k.to_s] = {e[:type] => "#{e[:value]}"}
       end
 
       # Get item.

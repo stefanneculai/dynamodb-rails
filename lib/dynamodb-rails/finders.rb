@@ -23,9 +23,11 @@ module Dynamo
                     {}
                   end
 
+        # TODO verify for [[RAMGE, HASH], [RANGE, HASH]]
         ids = Array(ids.flatten.uniq)
-        if ids.count == 1
-          self.find_by_id(ids.first)
+        if ids.count == 1 || (!self.range_key.nil? and ids.count == 2 and !ids.first.respond_to?(:each))
+          self.find_by_id(ids.first) if self.range_key.nil?
+          self.find_by_id(ids) if !self.range_key.nil?
         else
           find_all(ids)
         end
@@ -122,7 +124,7 @@ module Dynamo
           attributes = method.to_s.split('_by_').last.split('_and_')
 
           chain = Dynamo::Criteria::Chain.new(self)
-          chain.query = Hash.new.tap {|h| attributes.each_with_index {|attr, index| h[attr.to_sym] = args[index]}}
+          chain.where(Hash.new.tap {|h| attributes.each_with_index {|attr, index| h[attr.to_sym] = args[index]}})
 
           if finder =~ /all/
             return chain.all

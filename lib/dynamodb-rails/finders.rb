@@ -39,7 +39,9 @@ module Dynamo
           unless self.range_key.nil?
             raise 'Key is expected to be [HASH, RANGE].'
           end
-          key = {self.hash_key => id}
+          v = Dynamo::Helpers.dump_field(id, self.attributes[self.hash_key])
+          t = Dynamo::Helpers.key_type_dump(self.attributes[self.hash_key][:type])
+          key = {self.hash_key => {:value => v, :type => t}}
 
           # RANGE KEY
         elsif id.respond_to?(:each)
@@ -50,8 +52,13 @@ module Dynamo
           if id.length != 2
             raise 'Key is expected to be [HASH,RANGE].'
           end
-          key[self.hash_key] = id.first
-          key[self.range_key] = id.last
+          v = Dynamo::Helpers.dump_field(id.first, self.attributes[self.hash_key])
+          t = Dynamo::Helpers.key_type_dump(self.attributes[self.hash_key][:type])
+          key[self.hash_key] = {:value => v, :type => t}
+
+          v = Dynamo::Helpers.dump_field(id.second, self.attributes[self.range_key])
+          t = Dynamo::Helpers.key_type_dump(self.attributes[self.range_key][:type])
+          key[self.range_key] = {:value => v, :type => t}
         end
 
         return key
@@ -70,7 +77,6 @@ module Dynamo
       #   find all the tweets using hash key and range key with consistent read
       #   Tweet.find_all([['1', 'red'], ['1', 'green']], :consistent_read => true)
       def find_all(ids, options = {})
-
         keys = []
 
         ids.each do |id|
@@ -91,7 +97,6 @@ module Dynamo
       #
       # @since 0.2.0
       def find_by_id(id, options={})
-
         item = Dynamo::Client.get_item(self.table_name, get_key(id), options)
         if item
           from_database(item)

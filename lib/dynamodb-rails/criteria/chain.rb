@@ -29,7 +29,15 @@ module Dynamo #:nodoc:
       # @example A more complicated criteria
       #   where(:name => 'Josh', 'created_at.gt' => DateTime.now - 1.day)
       def where(args)
-        args.each {|k, v| query[k.to_sym] = v}
+        args.each do |k, v|
+          mk = k.to_s.split('.').first.to_sym
+          if @source.attributes.has_key? mk
+            vx = Dynamo::Helpers.dump_field(v, @source.attributes[mk])
+            tx = Dynamo::Helpers.key_type_dump(@source.attributes[mk][:type])
+            query[k.to_sym] = {:value => vx, :type => tx}
+          end
+        end
+
         self
       end
 

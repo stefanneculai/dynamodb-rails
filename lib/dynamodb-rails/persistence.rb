@@ -22,15 +22,6 @@ module Dynamo
       end
 
       # Creates a table.
-      #
-      # @param [Hash] options options to pass for table creation
-      # @option options [Symbol] :id the id field for the table
-      # @option options [Symbol] :table_name the actual name for the table
-      # @option options [Integer] :read_capacity set the read capacity for the table; does not work on existing tables
-      # @option options [Integer] :write_capacity set the write capacity for the table; does not work on existing tables
-      # @option options [Hash] {range_key => :type} a hash of the name of the range key and a symbol of its type
-      #
-      # @since 0.4.0
       def create_table
         return true if table_exists?(table_name)
 
@@ -141,9 +132,13 @@ module Dynamo
       Hash.new.tap do |hash|
         self.class.attributes.each do |attribute, options|
           if new_record?
-            hash[attribute] = Dynamo::Helpers.dump_field(self.read_attribute(attribute), options)
+            hash[attribute] = {
+              :value => Dynamo::Helpers.dump_field(self.read_attribute(attribute), options),
+              :type => Dynamo::Helpers.key_type_dump(options[:type])}
           else
-            hash[attribute] = Dynamo::Helpers.dump_field(self.read_attribute(attribute), options) if self.changed_attributes.has_key?(attribute.to_sym)
+            hash[attribute] = {
+              :value => Dynamo::Helpers.dump_field(self.read_attribute(attribute), options),
+              :type => Dynamo::Helpers.key_type_dump(options[:type])} if self.changed_attributes.has_key?(attribute.to_sym)
           end
         end
       end
@@ -154,20 +149,20 @@ module Dynamo
       conditions = {}
 
       if self.changed_attributes.has_key?(self.hash_key)
-        key = Dynamo::Helpers.dump_field(self.changed_attributes(self.hash_key), self.class.attributes[self.hash_key])
-        conditions[self.hash_key] = {:value => key}
+        key = Dynamo::Helpers.dump_field(self.changed_attributes[self.hash_key], self.class.attributes[self.hash_key])
+        conditions[self.hash_key] = {:value => key, :type => Dynamo::Helpers.key_type_dump(self.class.attributes[self.hash_key][:type])}
       else
         key = Dynamo::Helpers.dump_field(self.hash_key_value, self.class.attributes[self.hash_key])
-        conditions[self.hash_key] = {:value => key}
+        conditions[self.hash_key] = {:value => key, :type => Dynamo::Helpers.key_type_dump(self.class.attributes[self.hash_key][:type])}
       end
 
       if self.range_key
         if self.changed_attributes.has_key?(self.range_key)
-          key = Dynamo::Helpers.dump_field(self.changed_attributes(self.range_key), self.class.attributes[self.range_key])
-          conditions[self.range_key] = {:value => key}
+          key = Dynamo::Helpers.dump_field(self.changed_attributes[self.range_key], self.class.attributes[self.range_key])
+          conditions[self.range_key] = {:value => key, :type => Dynamo::Helpers.key_type_dump(self.class.attributes[self.range_key][:type])}
         else
           key = Dynamo::Helpers.dump_field(self.range_key_value, self.class.attributes[self.range_key])
-          conditions[self.range_key] = {:value => key}
+          conditions[self.range_key] = {:value => key, :type => Dynamo::Helpers.key_type_dump(self.class.attributes[self.range_key][:type])}
         end
       end
 

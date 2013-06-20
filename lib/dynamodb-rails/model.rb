@@ -43,8 +43,9 @@ module Dynamo #:nodoc:
       def hash_key(*args)
         if args.size == 0
           self.options[:keys][:hash][:name] unless self.options[:keys][:hash].nil?
-        elsif args.size == 2 || args.size == 1
-          self.options[:keys][:hash] = {:name => args[0], :type => (args.size == 1 ? :S : args[1])}
+        elsif args.size == 1 || args.size == 2
+          self.options[:keys][:hash] = {:name => args[0], :type => Dynamo::Helpers.key_type_dump(args.size == 2 ? args[1] : :S)}
+          self.field(args[0], args.size == 2 ? args[1] : :S)
         else
           raise 'Wrong number of arguments'
         end
@@ -54,8 +55,9 @@ module Dynamo #:nodoc:
       def range_key(*args)
         if args.size == 0
           self.options[:keys][:range][:name] unless self.options[:keys][:range].nil?
-        elsif args.size == 2 || args.size == 1
-          self.options[:keys][:range] = {:name => args[0], :type => (args.size == 1 ? :S : args[1])}
+        elsif args.size == 1 || args.size == 2
+          self.options[:keys][:range] = {:name => args[0], :type => Dynamo::Helpers.key_type_dump(args.size == 2 ? args[1] : :S)}
+          self.field(args[0], args.size == 2 ? args[1] : :S)
         else
           raise 'Wrong number of arguments'
         end
@@ -86,8 +88,8 @@ module Dynamo #:nodoc:
 
       # secondary_index :atrribute, :type,
       def index(name, projection=:ALL, non_key=[])
-        raise "No such field #{name}" unless @attributes.has_key?(name)
-        self.options[:indexes].push({:field => name, :projection => projection, :non_key => non_key})
+        raise "No such field #{name}" unless self.attributes.has_key?(name)
+        self.options[:indexes].push({:name => name, :type => Dynamo::Helpers.key_type_dump(self.attributes[name][:type]), :projection => projection, :non_key => non_key})
       end
 
       # Initialize a new object and immediately save it to the database.
@@ -148,12 +150,6 @@ module Dynamo #:nodoc:
     def initialize(attrs = {})
       run_callbacks :initialize do
         # Set keys as fields.
-        self.class.send(:field, self.options[:keys][:hash][:name]) if self.options[:keys].has_key?(:hash)
-        self.class.send(:field, self.options[:keys][:range][:name]) if self.options[:keys].has_key?(:range)
-
-        # Set keys type
-        self.options[:keys].inject({}){|h, (k, v)| h[k] = Dynamo::Helpers.field_to_key(v); h}
-
         @new_record = true
         @attributes ||= {}
 

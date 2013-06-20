@@ -27,31 +27,6 @@ module Dynamo
       end
     end
 
-    # Find out the type of the field.
-    def type_indicator(value)
-      case
-        when value.kind_of?(AWS::DynamoDB::Binary) then "B"
-        when value.respond_to?(:to_str) then "S"
-        when value.kind_of?(Numeric) then "N"
-        when value.respond_to?(:each)
-          indicator = nil
-          value.each do |v|
-            member_indicator = type_indicator(v)
-            raise_error("nested collections") if
-              member_indicator.to_s.size > 1
-            raise_error("mixed types") if
-              indicator and member_indicator != indicator
-            indicator = member_indicator
-          end
-          indicator ||= "S"
-          :"#{indicator}S"
-        when value == :empty_number_set
-          "NS"
-        else
-          raise "unsupported attribute type #{value.class}"
-      end
-    end
-
     # Convert value from response to the right type.
     def value_from_response(hash, options = {})
       (type, value) = hash.to_a.first
@@ -136,6 +111,12 @@ module Dynamo
 
       # Do request
       @@client.create_table(r)
+
+      #begin
+        sleep 1
+        t = describe_table(opts[:table_name].to_s)
+        puts t
+      #end while t[:table_status] = 'ACTIVE'
     end
 
     # Describe table.
@@ -156,13 +137,15 @@ module Dynamo
     def put_item(opts, obj, conditions)
       r = {}
 
+      PP.pp(obj)
+
       # Table name.
       r[:table_name] = opts[:table_name].to_s
 
       # Item attributes.
       r[:item] = {}
-      obj.each do |key, value|
-        r[:item][key.to_s] = {type_indicator(value) => "#{value}"} unless value.nil?
+      obj.each do |key, e|
+        r[:item][key.to_s] = {e[:type] => "#{e[:value]}"} unless e[:value].nil?
       end
 
       # Set expectations.
@@ -170,7 +153,7 @@ module Dynamo
       conditions.each do |field, cond|
         r[:expected][field.to_s] = {}
         r[:expected][field.to_s][:exists] = cond[:exists] unless cond[:exists].nil?
-        r[:expected][field.to_s][:value] = {type_indicator(cond[:value]) => "#{cond[:value]}"} unless cond[:value].nil?
+        r[:expected][field.to_s][:value] = {cond[:type] => "#{cond[:value]}"} unless cond[:value].nil?
       end
 
       # Save item.
@@ -180,8 +163,6 @@ module Dynamo
     # Update item.
     def update_item(opts, obj, conditions)
 
-      puts conditions
-
       r = {}
 
       # Table name.
@@ -190,15 +171,15 @@ module Dynamo
       # Keys.
       r[:key] = {}
       opts[:keys].each do |key, value|
-        r[:key][value[:name].to_s] = {type_indicator(conditions[value[:name]][:value]) => "#{conditions[value[:name]][:value].to_s}"}
+        r[:key][value[:name].to_s] = {conditions[value[:name]][:type] => "#{conditions[value[:name]][:value].to_s}"}
       end
 
       # Set attributes.
       r[:attribute_updates] = {}
-      obj.each do |key, value|
+      obj.each do |key, e|
         r[:attribute_updates][key.to_s] = {}
-        r[:attribute_updates][key.to_s][:value] = {type_indicator(value) => "#{value}"} unless value.nil?
-        r[:attribute_updates][key.to_s][:action] = value.nil? ? 'DELETE' : 'PUT' # Nil values are deleted
+        r[:attribute_updates][key.to_s][:value] = {e[:type] => "#{e[:value]}"} unless e[:value].nil?
+        r[:attribute_updates][key.to_s][:action] = e[:value].nil? ? 'DELETE' : 'PUT' # Nil values are deleted
       end
 
       # Set expectations.
@@ -206,7 +187,7 @@ module Dynamo
       conditions.each do |field, cond|
         r[:expected][field.to_s] = {}
         r[:expected][field.to_s][:exists] = cond[:exists] unless cond[:exists].nil?
-        r[:expected][field.to_s][:value] = {type_indicator(cond[:value]) => "#{cond[:value]}"} unless cond[:value].nil?
+        r[:expected][field.to_s][:value] = {cond[:type] => "#{cond[:value]}"} unless cond[:value].nil?
       end
 
       # Return new values
@@ -227,8 +208,8 @@ module Dynamo
 
       # Set keys
       r[:key] = {}
-      key.each do |k, v|
-        r[:key][k.to_s] = {type_indicator(v[:value]) => "#{v[:value]}"}
+      key.each do |k, e|
+        r[:key][k.to_s] = {e[:type] => "#{e[:value]}"}
       end
 
       @@client.delete_item(r)
@@ -270,8 +251,8 @@ module Dynamo
       r[:request_items][table_name.to_s][:keys] = [] unless keys.empty?
       keys.each do |key|
         l_key = {}
-        key.each do |k, v|
-          l_key[k.to_s] = {type_indicator(v) => "#{v}"}
+        key.each do |k, e|
+          l_key[k.to_s] = {e[:type] => "#{e[:value]}"}
         end
 
         r[:request_items][table_name.to_s][:keys].push(l_key)
@@ -308,8 +289,8 @@ module Dynamo
       r[:exclusive_start_key] = opts[:last_evaluated_key] unless opts[:last_evaluated_key].nil?
       if opts[:next_token]
         r[:exclusive_start_key] = {}
-        opts[:next_token].each do |k, v|
-          r[:exclusive_start_key][k.to_s] = {type_indicator(v) => "#{v}"}
+        opts[:next_token].each do |k, e|
+          r[:exclusive_start_key][k.to_s] = {e[:type] => "#{e[:value]}"}
         end
 
         opts.delete(:next_token)
@@ -317,18 +298,20 @@ module Dynamo
 
       # Selected attrs.
       r[:attributes_to_get] = opts[:select] if opts[:select] and opts[:count].nil?
+      r[:select] = 'SPECIFIC_ATTRIBUTES' if opts[:select] and opts[:count].nil?
 
       # Set scan filter
       r[:scan_filter] = {} unless query.empty?
+
       query.each do |key, value|
         attr = {}
         attr[:attribute_value_list] = []
-        if value.respond_to?(:each)
-          value.each do |v|
-            attr[:attribute_value_list].push({type_indicator(v) => "#{v}"})
+        if value.is_a?(Array)
+          value.each do |e|
+            attr[:attribute_value_list].push({e[:type] => "#{e[:value]}"})
           end
         else
-          attr[:attribute_value_list].push({type_indicator(value) => "#{value}"})
+          attr[:attribute_value_list].push({value[:type] => "#{value[:value]}"})
         end
         attr[:comparison_operator] = field_comparison(key.to_s)
 
@@ -380,8 +363,8 @@ module Dynamo
       r[:exclusive_start_key] = opts[:last_evaluated_key] unless opts[:last_evaluated_key].nil?
       if opts[:next_token]
         r[:exclusive_start_key] = {}
-        opts[:next_token].each do |k, v|
-          r[:exclusive_start_key][k.to_s] = {type_indicator(v) => "#{v}"}
+        opts[:next_token].each do |k, e|
+          r[:exclusive_start_key][k.to_s] = {e[:type] => "#{e[:value]}"}
         end
 
         opts.delete(:next_token)
@@ -395,18 +378,19 @@ module Dynamo
 
       # Selected attrs.
       r[:attributes_to_get] = opts[:select] if opts[:select] and opts[:count].nil?
+      r[:select] = 'SPECIFIC_ATTRIBUTES' if opts[:select] and opts[:count].nil?
 
       # Set query filter
       r[:key_conditions] = {} unless query.empty?
       query.each do |key, value|
         attr = {}
         attr[:attribute_value_list] = []
-        if value.respond_to?(:each)
-          value.each do |v|
-            attr[:attribute_value_list].push({type_indicator(v) => "#{v}"})
+        if value.is_a?(Array)
+          value.each do |e|
+            attr[:attribute_value_list].push({e[:type] => "#{e[:value]}"})
           end
         else
-          attr[:attribute_value_list].push({type_indicator(value) => "#{value}"})
+          attr[:attribute_value_list].push({value[:type] => "#{value[:value]}"})
         end
         attr[:comparison_operator] = field_comparison(key.to_s)
 

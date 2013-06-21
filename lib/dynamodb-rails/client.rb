@@ -111,12 +111,6 @@ module Dynamo
 
       # Do request
       @@client.create_table(r)
-
-      #begin
-        sleep 1
-        t = describe_table(opts[:table_name].to_s)
-        puts t
-      #end while t[:table_status] = 'ACTIVE'
     end
 
     # Describe table.

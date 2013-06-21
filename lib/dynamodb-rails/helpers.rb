@@ -52,7 +52,10 @@ module Dynamo
 
     def key_type_dump(key)
       return :N if key.to_s.upcase == "D"
-      raise "Wrong key type #{key}" unless ["N", "S", "B"].include?(key.to_s.upcase)
+      return :NS if key.to_s.upcase == "DS"
+
+      # TODO fix hack. Another method for converting Sets.
+      # raise "Wrong key type #{key}" unless ["N", "S", "B"].include?(key.to_s.upcase)
 
       key.to_s.upcase
     end

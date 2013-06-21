@@ -26,7 +26,7 @@ module Dynamo
         # TODO verify for [[RAMGE, HASH], [RANGE, HASH]]
         ids = Array(ids.flatten.uniq)
         if ids.count == 1 || (!self.range_key.nil? and ids.count == 2 and !ids.first.respond_to?(:each))
-          self.find_by_id(ids.first) if self.range_key.nil?
+          return self.find_by_id(ids.first) if self.range_key.nil?
           self.find_by_id(ids) if !self.range_key.nil?
         else
           find_all(ids)

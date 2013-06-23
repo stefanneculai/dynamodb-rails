@@ -152,6 +152,14 @@ module Dynamo #:nodoc:
         @batch_size ? results : Array(results)
       end
 
+      def records_with_get
+        Enumerator.new do |yielder|
+          Dynamo::Client.get_item(source.table_name, query, query_opts).each do |hash|
+            yielder.yield source.from_database(hash)
+          end
+        end
+      end
+
       # Get records from a range request.
       def records_with_range
         Enumerator.new do |yielder|
@@ -186,10 +194,10 @@ module Dynamo #:nodoc:
 
       # Use range query only when [hash_key] or [hash_key, range_key] is specified in query keys.
       def range?
-        # Query has hash_key or range_key
-        hr = (query_keys.include?(source.hash_key.to_s) or query_keys.include?(source.range_key.to_s))
+        # Table has hash, range key.
+        return false if source.range_key.nil?
 
-        # Query has hash_key or index_key
+        # Query has index_key
         query_index = nil
         source.options[:indexes].each do |index|
           if query_keys.include?(index[:name].to_s)
@@ -197,9 +205,6 @@ module Dynamo #:nodoc:
             @secondary_index = "#{source.table_name}_#{query_index.to_s}_index"
           end
         end
-
-        # Table has key [HASH,RANGE]
-        return false unless (hr or !query_index.nil?) and !source.range_key.nil?
 
         # Query is formed only with [KEY] or [KEY, HASH]
         only_hash = query_keys == [source.hash_key.to_s]

@@ -131,8 +131,6 @@ module Dynamo
     def put_item(opts, obj, conditions)
       r = {}
 
-      PP.pp(obj)
-
       # Table name.
       r[:table_name] = opts[:table_name].to_s
 

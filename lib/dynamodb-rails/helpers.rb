@@ -39,10 +39,14 @@ module Dynamo
           value
         when "SS"
           value.flatten
-        when "N", "D"
+        when "N"
           "#{value.to_f}"
-        when "NS", "DS"
+        when "D"
+          "#{value.to_i}"
+        when "NS"
           Set[*value.map {|v| "#{v.to_f}" }]
+        when "DS"
+          Set[*value.map {|v| "#{value.to_i}" }]
         when "B"
           AWS::DynamoDB::Binary.new(value)
         when "BS"

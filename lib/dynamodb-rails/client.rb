@@ -137,7 +137,7 @@ module Dynamo
       # Item attributes.
       r[:item] = {}
       obj.each do |key, e|
-        r[:item][key.to_s] = {e[:type] => "#{e[:value]}"} unless e[:value].nil?
+        r[:item][key.to_s] = {e[:type] => e[:value]} unless e[:value].nil?
       end
 
       # Set expectations.
@@ -163,14 +163,14 @@ module Dynamo
       # Keys.
       r[:key] = {}
       opts[:keys].each do |key, value|
-        r[:key][value[:name].to_s] = {conditions[value[:name]][:type] => "#{conditions[value[:name]][:value].to_s}"}
+        r[:key][value[:name].to_s] = {conditions[value[:name]][:type] => conditions[value[:name]][:value].to_s}
       end
 
       # Set attributes.
       r[:attribute_updates] = {}
       obj.each do |key, e|
         r[:attribute_updates][key.to_s] = {}
-        r[:attribute_updates][key.to_s][:value] = {e[:type] => "#{e[:value]}"} unless e[:value].nil?
+        r[:attribute_updates][key.to_s][:value] = {e[:type] => e[:value]} unless e[:value].nil?
         r[:attribute_updates][key.to_s][:action] = e[:value].nil? ? 'DELETE' : 'PUT' # Nil values are deleted
       end
 
@@ -179,7 +179,7 @@ module Dynamo
       conditions.each do |field, cond|
         r[:expected][field.to_s] = {}
         r[:expected][field.to_s][:exists] = cond[:exists] unless cond[:exists].nil?
-        r[:expected][field.to_s][:value] = {cond[:type] => "#{cond[:value]}"} unless cond[:value].nil?
+        r[:expected][field.to_s][:value] = {cond[:type] => cond[:value]} unless cond[:value].nil?
       end
 
       # Return new values
@@ -201,7 +201,7 @@ module Dynamo
       # Set keys
       r[:key] = {}
       key.each do |k, e|
-        r[:key][k.to_s] = {e[:type] => "#{e[:value]}"}
+        r[:key][k.to_s] = {e[:type] => e[:value]}
       end
 
       @@client.delete_item(r)
@@ -220,7 +220,7 @@ module Dynamo
       # Set keys
       r[:key] = {}
       key.each do |k, e|
-        r[:key][k.to_s] = {e[:type] => "#{e[:value]}"}
+        r[:key][k.to_s] = {e[:type] => e[:value]}
       end
 
       # Get item.
@@ -244,7 +244,7 @@ module Dynamo
       keys.each do |key|
         l_key = {}
         key.each do |k, e|
-          l_key[k.to_s] = {e[:type] => "#{e[:value]}"}
+          l_key[k.to_s] = {e[:type] => e[:value]}
         end
 
         r[:request_items][table_name.to_s][:keys].push(l_key)
@@ -282,7 +282,7 @@ module Dynamo
       if opts[:next_token]
         r[:exclusive_start_key] = {}
         opts[:next_token].each do |k, e|
-          r[:exclusive_start_key][k.to_s] = {e[:type] => "#{e[:value]}"}
+          r[:exclusive_start_key][k.to_s] = {e[:type] => e[:value]}
         end
 
         opts.delete(:next_token)
@@ -300,10 +300,10 @@ module Dynamo
         attr[:attribute_value_list] = []
         if value.is_a?(Array)
           value.each do |e|
-            attr[:attribute_value_list].push({e[:type] => "#{e[:value]}"})
+            attr[:attribute_value_list].push({e[:type] => e[:value]})
           end
         else
-          attr[:attribute_value_list].push({value[:type] => "#{value[:value]}"})
+          attr[:attribute_value_list].push({value[:type] => value[:value]})
         end
         attr[:comparison_operator] = field_comparison(key.to_s)
 
@@ -356,7 +356,7 @@ module Dynamo
       if opts[:next_token]
         r[:exclusive_start_key] = {}
         opts[:next_token].each do |k, e|
-          r[:exclusive_start_key][k.to_s] = {e[:type] => "#{e[:value]}"}
+          r[:exclusive_start_key][k.to_s] = {e[:type] => e[:value]}
         end
 
         opts.delete(:next_token)
@@ -379,10 +379,10 @@ module Dynamo
         attr[:attribute_value_list] = []
         if value.is_a?(Array)
           value.each do |e|
-            attr[:attribute_value_list].push({e[:type] => "#{e[:value]}"})
+            attr[:attribute_value_list].push({e[:type] => e[:value]})
           end
         else
-          attr[:attribute_value_list].push({value[:type] => "#{value[:value]}"})
+          attr[:attribute_value_list].push({value[:type] => value[:value]})
         end
         attr[:comparison_operator] = field_comparison(key.to_s)
 

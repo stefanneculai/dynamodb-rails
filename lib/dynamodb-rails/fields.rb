@@ -83,6 +83,12 @@ module Dynamo #:nodoc:
       write_attribute(attribute, value)
       save
     end
+
+    def assign_attributes(new_attributes, options =   {}))
+      new_attributes.each do |k, v|
+        self.send("#{k}=", v)
+      end
+    end
     
     private
     
